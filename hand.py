@@ -48,10 +48,9 @@ def print_message(address, *args):
     print(f"little_pip_quat: {little_pip_quat}")
     print(f"little_dip_quat: {little_dip_quat}")
 
-    # --- 追加: CSV書き出し ---
     import csv
     import os
-    import pandas as pd
+    import time
     
     csv_filename = "hand_data_log.csv"
     fieldnames = [
@@ -73,7 +72,7 @@ def print_message(address, *args):
         "little_dip_quat_0", "little_dip_quat_1", "little_dip_quat_2", "little_dip_quat_3"
     ]
     row = {
-        "timestamp": pd.Timestamp.now(),
+        "timestamp": time.time(),  # Unix timestamp with microsecond precision
         "version": version,
         "id": id,
         "is_left": is_left,
