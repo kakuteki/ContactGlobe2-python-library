@@ -193,12 +193,6 @@ OSC サーバーはデーモンスレッドで動くため、メインプログ�
 
 ---
 
-## ライセンス
-
-MIT License で公開しています。
-
----
-
 ## 参考リンク
 
 - [ContactGlove 2 開発者向けドキュメント（プロトコル v1）](https://docs.diver-x.jp/contact-glove-2-dev/cg2_protocolv1)
