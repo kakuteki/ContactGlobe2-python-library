@@ -16,7 +16,7 @@ Diver-X 社の触覚グローブ **ContactGlove 2** から、手の姿勢デー�
 - デバイス情報（`/DS/HC/Device`）の受信
 - 関数版・クラス版それぞれのサンプル実装
 
-> 注意: 現時点で完成しているのは「接続 → 手のクォータニオン受信 → CSV 記録」までです。手首・コントローラ情報の取得や触覚フィードバック（Haptics）の送信は、関数の枠だけ用意された未実装の状態です。詳しくは後述の「実装状況」を参照してください。
+> 注意: 現時点で完成しているのは「接続 → 手のクォータニオン受信 → CSV 記録」までです。手首・コントローラ情報の取得や触覚フィードバック（Haptics）の送信は未実装です。詳しくは後述の「実装状況」を参照してください。
 
 ---
 
@@ -41,7 +41,7 @@ Diver-X 社の触覚グローブ **ContactGlove 2** から、手の姿勢デー�
 2. 依存ライブラリをインストールします。
 
    ```bash
-   pip install python-osc
+   pip install -r requirements.txt
    ```
 
 ---
@@ -88,8 +88,8 @@ Diver-X 社の触覚グローブ **ContactGlove 2** から、手の姿勢デー�
 | `contact_client.py` | `/DS/HC/Device` を送る送信テスト用クライアント |
 | `osc_server.py` | Diver-X に依存しない、素の OSC 受信ひな形（`/test` を受信） |
 | `osc_client.py` | Diver-X に依存しない、素の OSC 送信ひな形（`/test` を送信） |
-| `library/contactglobe2_client.py` | 上記処理をまとめた `ContactGlobe2Client` クラス。接続・サーバー起動/停止・デバイス情報取得をメソッド化 |
-| `library/contact_server.py` | 接続と受信を関数に分割した版（`DivingStation_connect()` / `Get_device_info()` など） |
+| `library/contactglobe2_client.py` | 中核となる `ContactGlobe2Client` クラス。接続・サーバー起動/停止・手データ/デバイス情報の受信をメソッド化 |
+| `library/__init__.py` | `library` パッケージのエントリ。`ContactGlobe2Client` と `JOINT_NAMES` を公開 |
 
 OSC の疎通だけを確認したい場合は `osc_server.py` / `osc_client.py` から、ContactGlove 2 の実機データを扱いたい場合は `hand.py` から始めると分かりやすい構成です。
 
@@ -119,31 +119,33 @@ CSV にはタイムスタンプ（Unix 時間）、バージョン、デバイ�
 接続やサーバー管理をまとめて扱いたい場合は `ContactGlobe2Client` を利用します。
 
 ```python
-from library.contactglobe2_client import ContactGlobe2Client
+from library import ContactGlobe2Client
 import time
+
+def on_hand_data(data):
+    # data = {"version", "id", "is_left", "joints": {関節名: (x, y, z, w), ...}}
+    side = "左" if data["is_left"] else "右"
+    print(f"[{side}手] index_mcp =", data["joints"]["index_mcp"])
 
 client = ContactGlobe2Client(
     server_ip="127.0.0.1",
-    client_port=25788,        # データ受信ポート
-    divingstation_port=25790, # DivingStation への送信ポート
+    client_port=25788,         # データ受信ポート
+    divingstation_port=25790,  # DivingStation への送信ポート
+    hand_callback=on_hand_data,
 )
 
-client.connect_divingstation()  # 接続要求を送信
-client.start_osc_server()       # 別スレッドで受信サーバーを起動
-
-try:
-    while True:
-        info = client.get_device_info()
-        if info:
-            print("デバイス情報:", info)
-        time.sleep(1)
-except KeyboardInterrupt:
-    pass
-finally:
-    client.stop_osc_server()     # サーバーを停止
+client.connect_divingstation()      # 接続要求を送信
+if client.start_osc_server():       # 別スレッドで受信サーバーを起動
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        client.stop_osc_server()    # サーバーを停止
 ```
 
-OSC サーバーはデーモンスレッドで動くため、メインプログラムの処理を止めずにバックグラウンドで受信を続けられます。
+`hand_callback` を渡すと、手データを受信するたびに整形済みの辞書が渡されます。コールバックを使わず `client.get_hand_data()` で最後に受信した値を取得することもできます。OSC サーバーはデーモンスレッドで動くため、メインプログラムの処理を止めずにバックグラウンドで受信を続けられます。
 
 ---
 
@@ -183,13 +185,13 @@ OSC サーバーはデーモンスレッドで動くため、メインプログ�
 | 機能 | 状態 |
 | --- | --- |
 | DivingStation への接続要求 | 実装済み |
-| 手の姿勢データ（HandQuat）の受信・パース | 実装済み |
+| 手の姿勢データ（HandQuat）の受信・パース | 実装済み（クラス版・`hand.py` の両方） |
 | 受信データの CSV ロギング | 実装済み（`hand.py`） |
 | デバイス情報（Device）の受信 | 実装済み |
-| 手首・コントローラ情報の取得 | 未実装（関数の枠のみ） |
-| 触覚フィードバック（Haptics）の送信 | 未実装（関数の枠のみ） |
+| 手首・コントローラ情報の取得 | 未実装 |
+| 触覚フィードバック（Haptics）の送信 | 未実装 |
 
-ライブラリ版（`library/`）はクラス化・関数分割の途中段階で、手データの本格的なハンドラや送信系機能はこれから拡張していく構成になっています。
+手データの受信は `ContactGlobe2Client` に集約済みで、クラスを import するだけで取得できます。手首・コントローラ情報や送信系（Haptics）はこれから拡張していく構成です。
 
 ---
 
